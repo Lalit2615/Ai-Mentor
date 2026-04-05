@@ -4,8 +4,7 @@ import os
 import datetime
 import re
 import traceback
-import asyncio
-import edge_tts
+from elevenlabs.client import ElevenLabs
 import cloudinary
 import cloudinary.uploader
 from fastapi import FastAPI, BackgroundTasks
@@ -18,6 +17,8 @@ from config import (
     CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET,
+    ELEVENLABS_API_KEY,
+    ELEVENLABS_VOICE_ID,
 )
 
 # --------------------------
@@ -47,6 +48,7 @@ app.add_middleware(
 # Gemini Client
 # --------------------------
 client = genai.Client(api_key=GEMINI_API_KEY)
+eleven_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # --------------------------
 # Request Model
@@ -61,14 +63,24 @@ class LessonRequest(BaseModel):
 # --------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-async def generate_tts(text: str, output_file: str):
-    communicate = edge_tts.Communicate(
+def generate_tts(text: str, output_file: str):
+    audio = eleven_client.text_to_speech.convert(
+        voice_id=ELEVENLABS_VOICE_ID,
+        model_id="eleven_multilingual_v2",
         text=text,
-        voice="en-US-GuyNeural",
-        rate="+0%",
-        pitch="+0Hz"
+        output_format="mp3_44100_128",
+        voice_settings={
+            "stability": 0.55,
+            "similarity_boost": 0.8,
+            "style": 0.3,
+            "use_speaker_boost": True,
+        }
     )
-    await communicate.save(output_file)
+
+    with open(output_file, "wb") as f:
+        for chunk in audio:
+            if chunk:
+                f.write(chunk)
 
 def get_celebrity_video(celebrity_name: str):
     input_video_dir = os.path.join(BASE_DIR, "backend", "input")
@@ -177,6 +189,7 @@ def process_lesson(data: LessonRequest, base_filename: str):
             print(f"📝 Generated text: {script}")
         except Exception as e:
             print(f"❌ Gemini Error: {e}")
+            job_status[base_filename] = {"status": "failed", "error": "Gemini generation failed"}
             return
 
         # 2️⃣ Create Output Folders
@@ -205,16 +218,18 @@ def process_lesson(data: LessonRequest, base_filename: str):
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
-            asyncio.run(generate_tts(script, audio_path))
+            generate_tts(script, audio_path)
             print(f"✅ Audio saved: {audio_path}")
         except Exception as e:
             print(f"❌ TTS Error: {e}")
+            job_status[base_filename] = {"status": "failed", "error": "TTS generation failed"}
             return
 
         # 5️⃣ Select Video
         input_video = get_celebrity_video(data.celebrity)
         if not os.path.exists(input_video):
             print(f"❌ Error: Video file not found at {input_video}")
+            job_status[base_filename] = {"status": "failed", "error": "Input video not found"}
             return
 
         # 6️⃣ Merge Video + Audio (FFmpeg)
