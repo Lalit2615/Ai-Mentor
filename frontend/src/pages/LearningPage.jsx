@@ -424,20 +424,18 @@ export default function Learning() {
   const saveLessonData = async (lessonId, data) => {
     try {
       const token = localStorage.getItem("token");
+      const mod = modules.find((m) => m.lessons?.some((l) => l.id === currentLesson.id));
       const res = await fetch("/api/users/course-progress", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           courseId: parseInt(courseId),
-          completedLesson: {
-            lessonId,
-            data
-          },
           lessonData: { lessonId, data },
           currentLesson: {
             lessonId,
-            moduleTitle: modules?.find((m) => m.id === expandedModule)?.title || "",
+            moduleTitle: mod.title || "",
           },
+          completedLesson: { lessonId },
         }),
       });
       if (res.ok) {
