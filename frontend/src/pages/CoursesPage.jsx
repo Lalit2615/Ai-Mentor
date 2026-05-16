@@ -6,6 +6,7 @@ import API_BASE_URL from "../lib/api";
 import { useTranslation } from "react-i18next";
 import ReportModal from "../components/common/ReportModal";
 import toast from "react-hot-toast";
+import { AlertTriangle } from "lucide-react";
 
 const CoursesPage = () => {
   const { t } = useTranslation();
