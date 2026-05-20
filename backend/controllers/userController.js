@@ -438,15 +438,18 @@ const updateUserProfile = async (req, res) => {
 
     // Avatar Upload Handling
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: "user_avatars",
-        public_id: `user_${user.id}`,
-        overwrite: true,
-      });
-
-      user.avatar_url = result.secure_url;
-
-      fs.unlinkSync(req.file.path);
+      if (process.env.CLOUDINARY_API_KEY === 'your_api_key' || !process.env.CLOUDINARY_API_KEY) {
+        user.avatar_url = `https://ui-avatars.com/api/?name=${user.firstName || 'User'}&background=random`;
+        fs.unlinkSync(req.file.path);
+      } else {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: "user_avatars",
+          public_id: `user_${user.id}`,
+          overwrite: true,
+        });
+        user.avatar_url = result.secure_url;
+        fs.unlinkSync(req.file.path);
+      }
     }
 
     // Update text fields
@@ -581,13 +584,19 @@ const completeProfile = async (req, res) => {
 
     // Avatar upload via Cloudinary (required if not already set)
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: "user_avatars",
-        public_id: `user_${user.id}`,
-        overwrite: true,
-      });
-      user.avatar_url = result.secure_url;
-      fs.unlinkSync(req.file.path);
+      if (process.env.CLOUDINARY_API_KEY === 'your_api_key' || !process.env.CLOUDINARY_API_KEY) {
+        // BYPASS CLOUDINARY FOR OFFLINE DEV
+        user.avatar_url = `https://ui-avatars.com/api/?name=${user.firstName || 'User'}&background=random`;
+        fs.unlinkSync(req.file.path);
+      } else {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: "user_avatars",
+          public_id: `user_${user.id}`,
+          overwrite: true,
+        });
+        user.avatar_url = result.secure_url;
+        fs.unlinkSync(req.file.path);
+      }
     } else if (!user.avatar_url) {
       return res.status(400).json({ message: "Profile photo is required" });
     }

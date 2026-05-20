@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Subtitles } from "lucide-react";
+import ReactPlayer from 'react-player';
 
 const VideoPlayer = ({
   currentLesson,
@@ -92,21 +93,49 @@ const VideoPlayer = ({
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
       {/* Video */}
-      <video
-        ref={videoRef}
-        src={
-          aiVideoUrl ||
-          (selectedCelebrity && celebrityVideoMap[selectedCelebrity]?.video) ||
-          currentLesson?.videoUrl
-        }
-        className="w-full h-full object-contain"
-        onTimeUpdate={handleProgress}
-        onLoadedMetadata={handleProgress}
-        controls={false}
-        playsInline
-        onClick={togglePlay}
-        onEnded={onEnded}
-      />
+      {/* If it's a youtube URL and NO local video is selected, use ReactPlayer! */}
+      {!(aiVideoUrl || (selectedCelebrity && celebrityVideoMap[selectedCelebrity]?.video)) && currentLesson?.youtubeUrl ? (
+        <div className="w-full h-full">
+          <ReactPlayer
+            ref={(player) => {
+              if (player && videoRef) {
+                videoRef.current = {
+                  get duration() { return player.getDuration() || 0; },
+                  get currentTime() { return player.getCurrentTime() || 0; },
+                  set currentTime(val) { player.seekTo(val, 'seconds'); },
+                  play: () => Promise.resolve(),
+                  pause: () => {},
+                };
+              }
+            }}
+            url={currentLesson.youtubeUrl}
+            width="100%"
+            height="100%"
+            controls={true}
+            playing={isPlaying}
+            onEnded={onEnded}
+            onProgress={() => {
+              if (handleProgress) handleProgress();
+            }}
+          />
+        </div>
+      ) : (
+        <video
+          ref={videoRef}
+          src={
+            aiVideoUrl ||
+            (selectedCelebrity && celebrityVideoMap[selectedCelebrity]?.video) ||
+            currentLesson?.videoUrl
+          }
+          className="w-full h-full object-contain"
+          onTimeUpdate={handleProgress}
+          onLoadedMetadata={handleProgress}
+          controls={false}
+          playsInline
+          onClick={togglePlay}
+          onEnded={onEnded}
+        />
+      )}
 
       {/* Loading Overlay (Original Style) */}
       {showLoading && (
@@ -128,7 +157,7 @@ const VideoPlayer = ({
       )}
 
       {/* Custom Video Controls */}
-      <div className={`absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/90 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/90 to-transparent p-4 transition-opacity duration-300 ${showControls && (aiVideoUrl || (selectedCelebrity && celebrityVideoMap[selectedCelebrity]?.video)) ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         {/* Progress Bar */}
         <div
           className="w-full bg-gray-600 rounded-full h-1.5 cursor-pointer mb-3 hover:h-2 transition-all"

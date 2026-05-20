@@ -1,4 +1,5 @@
 // backend/server.js
+process.env.UV_THREADPOOL_SIZE = 64;
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
