@@ -1,6 +1,7 @@
 // frontend/src/pages/Settings.jsx
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import { getAuth, signOut } from "firebase/auth";
 import {
   User, Bell, Shield, Palette, Globe, Camera,
   Eye, EyeOff, UserX, Sparkles, ArrowLeft, X, ChevronRight,
@@ -174,12 +175,17 @@ export default function Settings() {
   const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
   /* handlers */
-  const handleDeleteAccount = async () => {
+const handleDeleteAccount = async () => {
     try {
       setDeleting(true);
       const token = localStorage.getItem("token");
       await axios.delete("/api/users/delete-account", { headers: { Authorization: `Bearer ${token}` } });
       localStorage.removeItem("token");
+
+      // ✅ FIX: Sign out from Firebase/Google session
+      const auth = getAuth();
+      await signOut(auth);
+
       window.location.href = "/login";
     } catch (error) { console.error("Delete error", error); }
     finally { setDeleting(false); }
