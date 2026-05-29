@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Flag, Mail, Phone, FileText, Award, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import API_BASE_URL from "../lib/api";
+import FloatingAssistant from "../components/common/FloatingAssistant";
 
 const ReportPage = () => {
   const [form, setForm] = useState({
@@ -99,6 +100,7 @@ const ReportPage = () => {
   }
 
   return (
+    <main>
     <div className="p-6 md:p-10 max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-10">
@@ -226,6 +228,8 @@ const ReportPage = () => {
         Reports are reviewed within 24–48 hours. For urgent issues, contact support directly.
       </p>
     </div>
+    <FloatingAssistant />
+    </main>
   );
 };
 
