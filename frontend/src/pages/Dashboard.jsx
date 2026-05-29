@@ -414,6 +414,7 @@ const Dashboard = () => {
                       src={course.image}
                       alt={course.title}
                       className="w-full h-full object-cover rounded-t-xl"
+                      loading="lazy"
                     />
 
                     {/* Rating */}
@@ -492,6 +493,7 @@ const Dashboard = () => {
                                 src={course.image}
                                 alt={course.title}
                                 className="w-12 h-12 rounded-lg mr-4"
+                                loading="lazy"
                               />
                               <div>
                                 <div className="font-medium text-main hover:text-indigo-600">
@@ -544,6 +546,7 @@ const Dashboard = () => {
                               src={course.image}
                               alt={course.title}
                               className="w-12 h-12 rounded-lg mr-4"
+                              loading="lazy"
                             />
                             <div className="min-w-0">
                               <div className="font-medium text-main truncate">
@@ -605,6 +608,7 @@ const Dashboard = () => {
                             src={item.image}
                             alt={item.title}
                             className="w-12 h-12 rounded-lg mr-4"
+                            loading="lazy"
                           />
                           <div className="flex-1">
                             <h3 className="font-medium text-main mb-1 hover:text-teal-600">
