@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import ReportModal from "../components/common/ReportModal";
 import toast from "react-hot-toast";
 import { AlertTriangle } from "lucide-react";
+import FloatingAssistant from "../components/common/FloatingAssistant";
 
 const CoursesPage = () => {
     const { t } = useTranslation();
@@ -848,6 +849,7 @@ const CoursesPage = () => {
                     )}
 
                 </div>
+                <FloatingAssistant />
             </main>
 
             {/* ================= ENROLL POPUP ================= */}
@@ -903,7 +905,7 @@ const CoursesPage = () => {
                     </div>
                 </div>
             )}
-        </>
+        </>    
     );
 };
 

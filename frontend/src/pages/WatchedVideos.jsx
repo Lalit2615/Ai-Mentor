@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import API_BASE_URL from "../lib/api";
+import FloatingAssistant from "../components/common/FloatingAssistant";
 
 const WatchedVideos = () => {
   const { t } = useTranslation();
@@ -458,6 +459,7 @@ const WatchedVideos = () => {
             ))}
           </div>
         )}
+        <FloatingAssistant />
         </main>
     </>
   );

@@ -11,6 +11,7 @@ import { useTheme } from "../context/ThemeContext";
 import toast from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n/index.js";
+import FloatingAssistant from "../components/common/FloatingAssistant.jsx";
 
 const NAV_KEYS = [
   { icon: User,     key: "profile",           labelKey: "settings.nav.profile" },
@@ -664,6 +665,7 @@ const renderPanel = (key) => {
         {/* ── Desktop main content ── */}
         <main className="hidden lg:block flex-1 p-3 sm:p-4 md:p-6 lg:p-8 lg:mt-5 min-w-0">
           {renderPanel(activeSetting)}
+          <FloatingAssistant />
         </main>
 
         {/* ── Mobile placeholder card ── */}
