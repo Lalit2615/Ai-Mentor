@@ -1,5 +1,5 @@
 import toast from 'react-hot-toast';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
 export const apiFetch = async (url, options = {}) => {
   const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE_URL}${url}`, {
@@ -17,9 +17,9 @@ export const apiFetch = async (url, options = {}) => {
     localStorage.removeItem('user');
 
     toast.error('Session expired. Please login again.');
-setTimeout(() => {
-  window.location.href = '/login';
-}, 2000);
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 2000);
     return null;
   }
   return response;
