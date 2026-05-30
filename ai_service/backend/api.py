@@ -81,6 +81,37 @@ def get_celebrity_video(celebrity_name: str):
         print(f"🎬 Using default video: {input_video}")
         return input_video
 
+def cleanup_old_files():
+    """
+    Periodically cleans up old files in the outputs directory to prevent disk fill-up.
+    Transcripts and audio files are cleaned after 30 minutes.
+    Video files are cleaned after 120 minutes (in case Cloudinary upload failed and local fallback is used).
+    """
+    now = datetime.datetime.now()
+    base_output_dir = os.path.join(BASE_DIR, "outputs")
+    
+    dirs_to_clean = {
+        "text": datetime.timedelta(minutes=30),
+        "audio": datetime.timedelta(minutes=30),
+        "video": datetime.timedelta(minutes=120)
+    }
+    
+    for folder, max_age in dirs_to_clean.items():
+        directory = os.path.join(base_output_dir, folder)
+        if not os.path.exists(directory):
+            continue
+        cutoff = now - max_age
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            if os.path.isfile(file_path):
+                try:
+                    file_time = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+                    if file_time < cutoff:
+                        os.remove(file_path)
+                        print(f"Cleaned up old file: {file_path}")
+                except Exception as e:
+                    print(f"Failed to delete {file_path}: {e}")
+
 # --------------------------
 # Serve Files
 # --------------------------
@@ -135,6 +166,7 @@ def generate_lesson(data: LessonRequest, background_tasks: BackgroundTasks):
     job_status[base_filename] = {"status": "processing"}
 
     # Run as a background task to avoid timeout issues
+    background_tasks.add_task(cleanup_old_files)
     background_tasks.add_task(process_lesson, data, base_filename)
     
     return {
@@ -229,6 +261,14 @@ def process_lesson(data: LessonRequest, base_filename: str):
         print(f"🎥 Running ffmpeg command...")
         os.system(ffmpeg_command)
 
+        # 🧹 Delete temporary audio file immediately after merging
+        if os.path.exists(audio_path):
+            try:
+                os.remove(audio_path)
+                print(f"Temporary audio cleaned up: {audio_path}")
+            except Exception as e:
+                print(f"Failed to delete temporary audio: {e}")
+
         if not os.path.exists(final_video):
             print(f"❌ FFmpeg failed — video file not found at {final_video}")
             job_status[base_filename] = {"status": "failed"}
@@ -248,6 +288,14 @@ def process_lesson(data: LessonRequest, base_filename: str):
             )
             cloudinary_url = upload_result.get("secure_url")
             print(f"✅ Cloudinary upload success: {cloudinary_url}")
+
+            # 🧹 Delete local video file immediately after successful upload
+            if os.path.exists(final_video):
+                try:
+                    os.remove(final_video)
+                    print(f"Local video cleaned up: {final_video}")
+                except Exception as e:
+                    print(f"Failed to delete local video: {e}")
         except Exception as cloud_err:
             print(f"⚠️ Cloudinary upload failed (will fall back to local proxy): {cloud_err}")
 
