@@ -12,19 +12,21 @@ const missingEnvVars = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"].filter(
   (key) => !process.env[key],
 );
 
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `Missing Razorpay environment variables: ${missingEnvVars.join(
-      ", ",
-    )}. Please check your .env file.`,
-  );
-}
+let razorpay = null;
 
-// ✅ Initialize Razorpay safely
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+if (missingEnvVars.length > 0) {
+  console.warn(
+    `⚠️ Warning: Missing Razorpay environment variables: ${missingEnvVars.join(
+      ", ",
+    )}. Razorpay features will not work properly.`,
+  );
+} else {
+  // ✅ Initialize Razorpay safely
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+}
 
 // ✅ Configure the rate limiter for payment creations
 const paymentLimiter = rateLimit({
@@ -40,6 +42,9 @@ const paymentLimiter = rateLimit({
 // ✅ CREATE ORDER
 router.post("/create-order", protect, paymentLimiter, async (req, res) => {
   try {
+    if (!razorpay) {
+      return res.status(500).json({ error: "Razorpay is not configured on this server." });
+    }
     const { course } = req.body;
 
     console.log("Incoming course for Razorpay:", course);
@@ -77,6 +82,9 @@ router.post("/create-order", protect, paymentLimiter, async (req, res) => {
 // ✅ VERIFY PAYMENT
 router.post("/verify", protect, async (req, res) => {
   try {
+    if (!razorpay) {
+      return res.status(500).json({ success: false, error: "Razorpay is not configured on this server." });
+    }
     const {
       razorpay_order_id,
       razorpay_payment_id,
