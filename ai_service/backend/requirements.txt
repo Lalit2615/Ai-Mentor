@@ -2,6 +2,8 @@ fastapi
 uvicorn
 python-dotenv
 google-genai
-pyttsx3
+groq
+asyncio
+edge-tts #Added
 requests
 cloudinary

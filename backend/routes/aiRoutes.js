@@ -1,25 +1,19 @@
 import AIVideo from "../models/AIVideo.js";
 import express from "express";
-import fs from "fs";
-import path from "path";
 import { protect } from "../middleware/authMiddleware.js";
+import validate from "../middleware/validate.js";
+import { generateVideoSchema } from "../schemas/aiSchema.js";
 import { getCourseAndLessonTitles } from "../controllers/courseController.js";
+import Preferences from "../models/Preference.js";
+//import { videoQueue } from "../queues/videoQueue.js";
 import dotenv from "dotenv";
 dotenv.config();
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-router.post("/generate-video", protect, async (req, res) => {
+router.post("/generate-video", protect, validate(generateVideoSchema), async (req, res) => {
   try {
     const { courseId, lessonId, celebrity } = req.body;
-
-    if (!courseId || !lessonId || !celebrity) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
 
     // 🔐 Check purchase
     const purchasedCourse = req.user.purchasedCourses.find(
@@ -40,12 +34,10 @@ router.post("/generate-video", protect, async (req, res) => {
     });
 
     if (cachedVideo) {
-      console.log("🎯 Cache found. Verifying file exists...");
-      // If already a trusted Cloudinary URL, return it directly — no local check needed
       let parsedUrl;
       try {
         parsedUrl = new URL(cachedVideo.videoUrl);
-      } catch (e) {
+      } catch {
         parsedUrl = null;
       }
       if (
@@ -53,7 +45,6 @@ router.post("/generate-video", protect, async (req, res) => {
         parsedUrl.protocol === "https:" &&
         parsedUrl.hostname.endsWith("res.cloudinary.com")
       ) {
-        console.log("✅ Trusted Cloudinary URL found. Serving directly.");
         return res.json({
           videoUrl: cachedVideo.videoUrl,
           transcriptName: cachedVideo.transcriptName,
@@ -96,46 +87,35 @@ router.post("/generate-video", protect, async (req, res) => {
 
     const { courseTitle, lessonTitle } = titles;
 
-    // Call AI service
-    console.log("🤖 Cache miss. Calling AI service for:", celebrity);
-    const aiResponse = await fetch(
-      `${process.env.AI_SERVICE_URL}/generate`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          course: courseTitle,
-          topic: lessonTitle,
-          celebrity,
-        }),
-      }
-    );
-
-    if (!aiResponse.ok) {
-      throw new Error("AI service failed");
-    }
-
-    const { filename, text_file, jobId } = await aiResponse.json();
-
-    const videoUrl = `/api/ai/video/${courseId}/${filename}`;
-    const textUrl = `/api/ai/transcript/${text_file}`;
-
-    // Save to Cache
-    await AIVideo.create({
-      courseId: Number(courseId),
-      lessonId: String(lessonId),
-      celebrity: String(celebrity).toLowerCase(),
-      videoUrl,
-      transcriptName: text_file,
-      jobId,
+    const userPreferencesRecord = await Preferences.findOne({
+      where: { user_id: req.user.id }   // 👈 FIX
     });
 
-    res.json({
-      videoUrl,
-      transcriptName: text_file,
-      jobId,
-      cached: false,
-    });
+    const userPreferences = userPreferencesRecord
+      ? userPreferencesRecord.toJSON()
+      : null;
+
+  
+    // Added to queue instead of blocking the request
+//     const job = await videoQueue.add("generate-video", {
+//       courseId,
+//       lessonId,
+//       celebrity,
+//       courseTitle,
+//       lessonTitle,
+//       userPreferences,
+//     });
+//
+//     console.log(`📥 Job added to queue: ${job.id}`);
+//
+//     res.json({
+//       jobId: job.id,
+//       status: "processing",
+//       message: "Video generation started",
+//     });
+       
+    // Temporary fallback response since videoQueue is disabled
+    return res.status(501).json({ message: "Video generation is temporarily disabled." });
 
   } catch (error) {
     console.error("AI GENERATE ERROR:", error);
@@ -222,7 +202,7 @@ router.get("/status/:jobId", protect, async (req, res) => {
 // ----------------------------------------------------
 router.get("/video/:courseId/:filename", async (req, res) => {
   try {
-    const { courseId, filename } = req.params;
+    const { filename } = req.params;
 
     const pythonVideoUrl =
       `${process.env.AI_SERVICE_URL}/video-stream/${filename}`;

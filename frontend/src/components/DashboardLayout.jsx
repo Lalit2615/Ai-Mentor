@@ -11,6 +11,8 @@ const routeToPage = {
   "/discussions": "discussions",
   "/settings": "settings",
   "/watchedvideos": "watched",
+  "/certificates": "certificates",
+  "/report": "report",
 };
 
 const DashboardLayout = () => {

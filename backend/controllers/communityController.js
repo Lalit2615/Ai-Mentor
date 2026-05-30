@@ -4,23 +4,34 @@ import Report from "../models/Report.js";
 import crypto from "crypto";
 import { Op } from "sequelize";
 import { createNotification } from "./notificationController.js";
+import AdminNotification from "../models/AdminNotification.js";
 
 // @desc    Get course community stats (list of courses with post counts)
 // @route   GET /api/community/courses
 // @access  Private
-const getCourseCommunityStats = async (_req, res) => {
+const getCourseCommunityStats = async (req, res) => {
   try {
     const posts = await CommunityPost.findAll({
       where: { type: "course" },
       attributes: ["courseId", "courseName"],
     });
 
+    // Get user's enrolled courses
+    const user = await User.findByPk(req.user.id);
+    const purchasedCourses = user?.purchasedCourses || [];
+    const enrolledCourseIds = purchasedCourses.map(c => c.id || c.courseId);
+
     // Aggregate by courseId
     const courseMap = {};
     posts.forEach((p) => {
       const key = p.courseId;
       if (!courseMap[key]) {
-        courseMap[key] = { courseId: p.courseId, courseName: p.courseName, postCount: 0 };
+        courseMap[key] = {
+          courseId: p.courseId,
+          courseName: p.courseName,
+          postCount: 0,
+          isEnrolled: enrolledCourseIds.includes(p.courseId),
+        };
       }
       courseMap[key].postCount++;
     });
@@ -40,10 +51,22 @@ const getCourseDiscussions = async (req, res) => {
     const { courseId } = req.params;
     const { sort } = req.query;
 
+    // Check if user is enrolled in the course
+    const user = await User.findByPk(req.user.id);
+    const purchasedCourses = user?.purchasedCourses || [];
+    const isEnrolled = purchasedCourses.some(c => c.id === parseInt(courseId) || c.courseId === parseInt(courseId));
+
+    if (!isEnrolled) {
+      return res.status(403).json({
+        message: "You must be enrolled in this course to view its community discussions",
+        requiresEnrollment: true
+      });
+    }
+
     const posts = await CommunityPost.findAll({
-      where: { type: "course", courseId: parseInt(courseId) },
+      where: { type: "course", courseId: parseInt(courseId), hiddenAt: null },
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -69,7 +92,7 @@ const getGlobalDiscussions = async (req, res) => {
   try {
     const { category, sort } = req.query;
 
-    const where = { type: "global" };
+    const where = { type: "global", hiddenAt: null };
     if (category && category !== "All Categories") {
       where.category = category;
     }
@@ -77,7 +100,7 @@ const getGlobalDiscussions = async (req, res) => {
     const posts = await CommunityPost.findAll({
       where,
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -106,22 +129,15 @@ const createCommunityPost = async (req, res) => {
 
     const { type, courseId, courseName, category, content } = req.body;
 
-    if (!type || !content) {
-      return res
-        .status(400)
-        .json({ message: "Type and content are required" });
-    }
+    // Check enrollment for course posts
+    if (type === "course") {
+      const user = await User.findByPk(req.user.id);
+      const purchasedCourses = user?.purchasedCourses || [];
+      const isEnrolled = purchasedCourses.some(c => c.id === courseId || c.courseId === courseId);
 
-    if (type === "course" && (!courseId || !courseName)) {
-      return res
-        .status(400)
-        .json({ message: "courseId and courseName are required for course posts" });
-    }
-
-    if (type === "global" && !category) {
-      return res
-        .status(400)
-        .json({ message: "Category is required for global posts" });
+      if (!isEnrolled) {
+        return res.status(403).json({ message: "You must be enrolled in this course to create posts in its community" });
+      }
     }
 
     const post = await CommunityPost.create({
@@ -138,7 +154,7 @@ const createCommunityPost = async (req, res) => {
 
     const populated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -159,9 +175,6 @@ const editCommunityPost = async (req, res) => {
     }
 
     const { content } = req.body;
-    if (!content || !content.trim()) {
-      return res.status(400).json({ message: "Post content is required" });
-    }
 
     const post = await CommunityPost.findByPk(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
@@ -175,7 +188,7 @@ const editCommunityPost = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -243,7 +256,7 @@ const likeCommunityPost = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -285,7 +298,7 @@ const dislikeCommunityPost = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -306,18 +319,28 @@ const replyCommunityPost = async (req, res) => {
     }
 
     const { text } = req.body;
-    if (!text) {
-      return res.status(400).json({ message: "Reply text is required" });
-    }
 
     const post = await CommunityPost.findByPk(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // Check enrollment for course posts
+    if (post.type === "course") {
+      const user = await User.findByPk(req.user.id);
+      const purchasedCourses = user?.purchasedCourses || [];
+      const isEnrolled = purchasedCourses.some(c => c.id === post.courseId || c.courseId === post.courseId);
+
+      if (!isEnrolled) {
+        return res.status(403).json({ message: "You must be enrolled in this course to comment in its discussion" });
+      }
+    }
 
     const newReply = {
       id: crypto.randomUUID(),
       userId: req.user.id,
       userName: req.user.name,
       userAvatar: req.user.avatar_url || null,
+      isGoogleUser: req.user.isGoogleUser || !!req.user.googleId,
+      googleId: req.user.googleId || null,
       text,
       likes: [],
       dislikes: [],
@@ -341,7 +364,7 @@ const replyCommunityPost = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -360,9 +383,9 @@ const getAllCoursePosts = async (req, res) => {
     const { sort } = req.query;
 
     const posts = await CommunityPost.findAll({
-      where: { type: "course" },
+      where: { type: "course", hiddenAt: null },
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -390,10 +413,6 @@ const reportContent = async (req, res) => {
     }
 
     const { replyId, reason, description } = req.body;
-
-    if (!reason) {
-      return res.status(400).json({ message: "Reason is required" });
-    }
 
     const post = await CommunityPost.findByPk(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
@@ -463,6 +482,13 @@ const reportContent = async (req, res) => {
         },
       });
     }
+    
+    // Also notify the admin dashboard
+    await AdminNotification.create({
+      title: isCommentReport ? "Comment Reported" : "Discussion Post Reported",
+      message: `${reporterName} reported a ${contentLabel}. ${reasonOrDescription}`,
+      type: "report",
+    });
 
     res.status(201).json({ message: "Report submitted successfully", report });
   } catch (error) {
@@ -550,10 +576,6 @@ const getReports = async (req, res) => {
 const moderateReport = async (req, res) => {
   try {
     const { action } = req.body;
-
-    if (!["hidden", "deleted", "dismissed"].includes(action)) {
-      return res.status(400).json({ message: "Invalid action. Use: hidden, deleted, or dismissed" });
-    }
 
     const report = await Report.findByPk(req.params.reportId);
     if (!report) return res.status(404).json({ message: "Report not found" });
@@ -654,9 +676,6 @@ const editReply = async (req, res) => {
     }
 
     const { text } = req.body;
-    if (!text || !text.trim()) {
-      return res.status(400).json({ message: "Reply text is required" });
-    }
 
     const post = await CommunityPost.findByPk(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found" });
@@ -687,7 +706,7 @@ const editReply = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -731,7 +750,7 @@ const deleteReply = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 
@@ -776,7 +795,7 @@ const unhideContent = async (req, res) => {
 
     const updated = await CommunityPost.findByPk(post.id, {
       include: [
-        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url"] },
+        { model: User, as: "author", attributes: ["id", "name", "email", "avatar_url", "googleId"] },
       ],
     });
 

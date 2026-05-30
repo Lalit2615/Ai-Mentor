@@ -1,66 +1,84 @@
-import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import AdminPage from "./pages/AdminPage";
+import { useMemo, useState, useEffect } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import Header from "./components/Header";
+import AdminSidebar from "./components/layout/AdminSidebar";
+import Toast from "./components/Toast";
+import { PAGE_TITLES } from "./constants/adminNavigation";
+import { ToastProvider } from "./context/ToastContext";
+import CoursesPage from "./pages/CoursesPage";
+import DashboardPage from "./pages/DashboardPage";
+import DiscussionsPage from "./pages/DiscussionsPage";
+import EnrollmentsPage from "./pages/EnrollmentsPage";
 import LoginPage from "./pages/LoginPage";
+import PaymentsPage from "./pages/PaymentsPage";
+import UsersPage from "./pages/UsersPage";
+import ReportsPage from "./pages/ReportsPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
 
-const isAdminRole = (role) => role === "admin" || role === "superAdmin";
 
-const getStoredUser = () => {
-  try {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+const PAGE_COMPONENTS = {
+  dashboard: DashboardPage,
+  courses: CoursesPage,
+  users: UsersPage,
+  enrollments: EnrollmentsPage,
+  payments: PaymentsPage,
+  reports: ReportsPage,
+  profile: ProfilePage,
+  settings: SettingsPage,
+  discussions: DiscussionsPage,
 };
 
-function RequireAdminAuth() {
-  const token = localStorage.getItem("token");
-  const user = getStoredUser();
+function App() {
   const location = useLocation();
+  const token = localStorage.getItem("token");
+  const [page, setPage] = useState("courses");
+  const [mobileNav, setMobileNav] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  if (!token) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  useEffect(() => {
+    const pathName = location.pathname.replace("/", "");     
+    if (PAGE_COMPONENTS[pathName]) {
+      setPage(pathName);
+    }
+  }, [location.pathname]);
+
+  const title = useMemo(() => PAGE_TITLES[page] ?? PAGE_TITLES.dashboard, [page]);
+  const CurrentPage = PAGE_COMPONENTS[page] ?? DashboardPage;
+  const isLoginRoute = location.pathname === "/login";
+
+  if (isLoginRoute) {
+    return <LoginPage />;
   }
 
-  if (!isAdminRole(user?.role)) {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+  if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  return <Outlet />;
-}
-
-function PublicOnly() {
-  const token = localStorage.getItem("token");
-  const user = getStoredUser();
-
-  if (token && isAdminRole(user?.role)) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return <Outlet />;
-}
-
-function App() {
   return (
-    <Routes>
-      <Route element={<PublicOnly />}>
-        <Route path="/login" element={<LoginPage />} />
-      </Route>
+    <ToastProvider>
+      <div className="min-h-screen bg-canvas-alt text-main">
+        <AdminSidebar
+          page={page}
+          onPageChange={setPage}
+          mobileOpen={mobileNav}
+          onMobileClose={() => setMobileNav(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={() => setSidebarCollapsed((prev) => !prev)}
+        />
 
-      <Route element={<RequireAdminAuth />}>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<AdminPage />} />
-        <Route path="/courses" element={<AdminPage />} />
-        <Route path="/users" element={<AdminPage />} />
-        <Route path="/enrollments" element={<AdminPage />} />
-        <Route path="/payments" element={<AdminPage />} />
-        <Route path="/reports" element={<AdminPage />} />
-      </Route>
+        <main className={`min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-24" : "lg:ml-80"}`}>
+          <Header title={title} onMenuClick={() => setMobileNav(true)} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+          <section className="p-4 md:p-8">
+            <div className="rounded-2xl bg-card border border-border overflow-hidden shadow-[0_2px_8px_rgba(26,26,26,0.06)]">
+              <CurrentPage />
+            </div>
+          </section>
+        </main>
+      </div>
+      <Toast />
+    </ToastProvider>
   );
 }
 
